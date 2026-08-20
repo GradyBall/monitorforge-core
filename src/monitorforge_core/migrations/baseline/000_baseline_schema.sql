@@ -4,6 +4,8 @@
 CREATE SCHEMA IF NOT EXISTS core;
 CREATE SCHEMA IF NOT EXISTS meta;
 
+CREATE TYPE core.resolution_type AS ENUM ('30s', '1m', '5m', '15m', 'hourly', '8h', 'daily', 'other');
+
 CREATE TYPE core.deployment_status AS ENUM ('active', 'inactive', 'maintenance', 'retired');
 
 CREATE TABLE core.calculation_runs (
@@ -62,8 +64,8 @@ CREATE TABLE core.sensors (
 );
 
 CREATE INDEX ix_core_sensors_variable_family ON core.sensors (variable_family);
-CREATE INDEX sensors_serial_idx ON core.sensors (serial_number);
 CREATE UNIQUE INDEX ix_core_sensors_serial_number ON core.sensors (serial_number);
+CREATE INDEX sensors_serial_idx ON core.sensors (serial_number);
 CREATE INDEX sensors_family_idx ON core.sensors (variable_family);
 
 CREATE TABLE core.uploads (
@@ -152,12 +154,12 @@ CREATE TABLE core.monitoring_areas (
 	UNIQUE (uuid)
 );
 
-CREATE INDEX ix_core_monitoring_areas_is_active ON core.monitoring_areas (is_active);
-CREATE INDEX monitoring_areas_active_idx ON core.monitoring_areas (is_active);
-CREATE INDEX monitoring_areas_project_idx ON core.monitoring_areas (project_id);
-CREATE INDEX monitoring_areas_code_idx ON core.monitoring_areas (code);
-CREATE INDEX ix_core_monitoring_areas_project_id ON core.monitoring_areas (project_id);
 CREATE UNIQUE INDEX ix_core_monitoring_areas_code ON core.monitoring_areas (code);
+CREATE INDEX ix_core_monitoring_areas_is_active ON core.monitoring_areas (is_active);
+CREATE INDEX monitoring_areas_code_idx ON core.monitoring_areas (code);
+CREATE INDEX monitoring_areas_project_idx ON core.monitoring_areas (project_id);
+CREATE INDEX monitoring_areas_active_idx ON core.monitoring_areas (is_active);
+CREATE INDEX ix_core_monitoring_areas_project_id ON core.monitoring_areas (project_id);
 
 CREATE TABLE core.variables (
 	variable_id SERIAL NOT NULL, 
@@ -179,9 +181,9 @@ CREATE TABLE core.variables (
 	UNIQUE (uuid)
 );
 
-CREATE UNIQUE INDEX ix_core_variables_code ON core.variables (code);
 CREATE INDEX vars_code_idx ON core.variables (code);
 CREATE INDEX ix_core_variables_unit_id ON core.variables (unit_id);
+CREATE UNIQUE INDEX ix_core_variables_code ON core.variables (code);
 CREATE INDEX vars_unit_idx ON core.variables (unit_id);
 
 CREATE TABLE core.monitoring_stations (
@@ -210,14 +212,14 @@ CREATE TABLE core.monitoring_stations (
 );
 
 CREATE INDEX ix_core_monitoring_stations_code ON core.monitoring_stations (code);
-CREATE INDEX ix_core_monitoring_stations_is_active ON core.monitoring_stations (is_active);
-CREATE INDEX monitoring_stations_area_idx ON core.monitoring_stations (area_id);
-CREATE INDEX monitoring_stations_code_idx ON core.monitoring_stations (code);
-CREATE INDEX monitoring_stations_project_idx ON core.monitoring_stations (project_id);
-CREATE INDEX monitoring_stations_type_idx ON core.monitoring_stations (station_type);
-CREATE INDEX monitoring_stations_active_idx ON core.monitoring_stations (is_active);
-CREATE INDEX ix_core_monitoring_stations_area_id ON core.monitoring_stations (area_id);
 CREATE INDEX ix_core_monitoring_stations_project_id ON core.monitoring_stations (project_id);
+CREATE INDEX monitoring_stations_area_idx ON core.monitoring_stations (area_id);
+CREATE INDEX monitoring_stations_project_idx ON core.monitoring_stations (project_id);
+CREATE INDEX ix_core_monitoring_stations_is_active ON core.monitoring_stations (is_active);
+CREATE INDEX ix_core_monitoring_stations_area_id ON core.monitoring_stations (area_id);
+CREATE INDEX monitoring_stations_code_idx ON core.monitoring_stations (code);
+CREATE INDEX monitoring_stations_active_idx ON core.monitoring_stations (is_active);
+CREATE INDEX monitoring_stations_type_idx ON core.monitoring_stations (station_type);
 CREATE INDEX ix_core_monitoring_stations_station_type ON core.monitoring_stations (station_type);
 
 CREATE TABLE core.sensor_deployments (
@@ -226,6 +228,7 @@ CREATE TABLE core.sensor_deployments (
 	station_id INTEGER NOT NULL, 
 	depth_cm FLOAT, 
 	position_code TEXT, 
+	resolution core.resolution_type, 
 	installed_at TIMESTAMP WITH TIME ZONE NOT NULL, 
 	removed_at TIMESTAMP WITH TIME ZONE, 
 	status core.deployment_status NOT NULL, 
@@ -243,13 +246,14 @@ CREATE TABLE core.sensor_deployments (
 	UNIQUE (uuid)
 );
 
-CREATE INDEX ix_core_sensor_deployments_sensor_id ON core.sensor_deployments (sensor_id);
+CREATE INDEX ix_core_sensor_deployments_station_id ON core.sensor_deployments (station_id);
 CREATE INDEX ix_core_sensor_deployments_status ON core.sensor_deployments (status);
 CREATE INDEX ix_core_sensor_deployments_depth_cm ON core.sensor_deployments (depth_cm);
-CREATE INDEX ix_core_sensor_deployments_station_id ON core.sensor_deployments (station_id);
+CREATE INDEX ix_core_sensor_deployments_resolution ON core.sensor_deployments (resolution);
 CREATE INDEX deployments_station_idx ON core.sensor_deployments (station_id);
-CREATE INDEX deployments_status_idx ON core.sensor_deployments (status);
 CREATE INDEX deploy_active_idx ON core.sensor_deployments (sensor_id, removed_at);
+CREATE INDEX ix_core_sensor_deployments_sensor_id ON core.sensor_deployments (sensor_id);
+CREATE INDEX deployments_status_idx ON core.sensor_deployments (status);
 
 CREATE TABLE core.deployment_date_changes (
 	deployment_date_change_id SERIAL NOT NULL, 
@@ -269,8 +273,8 @@ CREATE TABLE core.deployment_date_changes (
 	UNIQUE (uuid)
 );
 
-CREATE INDEX ix_core_deployment_date_changes_deployment_id ON core.deployment_date_changes (deployment_id);
 CREATE INDEX deployment_date_changes_deployment_idx ON core.deployment_date_changes (deployment_id, changed_at);
+CREATE INDEX ix_core_deployment_date_changes_deployment_id ON core.deployment_date_changes (deployment_id);
 
 CREATE TABLE core.measurements (
 	measurement_id BIGSERIAL NOT NULL, 
@@ -289,15 +293,15 @@ CREATE TABLE core.measurements (
 	FOREIGN KEY(flag_id) REFERENCES meta.quality_flags (flag_id)
 );
 
+CREATE INDEX ix_core_measurements_variable_id ON core.measurements (variable_id);
 CREATE INDEX ix_core_measurements_flag_id ON core.measurements (flag_id);
 CREATE INDEX measurements_flag_idx ON core.measurements (flag_id);
 CREATE INDEX measurements_qc_status_idx ON core.measurements (qc_status);
+CREATE INDEX measurements_deploy_ts_idx ON core.measurements (deployment_id, ts DESC);
 CREATE INDEX ix_core_measurements_ts ON core.measurements (ts);
 CREATE INDEX ix_core_measurements_qc_status ON core.measurements (qc_status);
-CREATE INDEX measurements_deploy_ts_idx ON core.measurements (deployment_id, ts DESC);
-CREATE INDEX measurements_variable_idx ON core.measurements (variable_id);
 CREATE INDEX ix_core_measurements_deployment_id ON core.measurements (deployment_id);
-CREATE INDEX ix_core_measurements_variable_id ON core.measurements (variable_id);
+CREATE INDEX measurements_variable_idx ON core.measurements (variable_id);
 
 CREATE TABLE core.sensor_calibrations (
 	calibration_id SERIAL NOT NULL, 
@@ -322,9 +326,9 @@ CREATE TABLE core.sensor_calibrations (
 	UNIQUE (uuid)
 );
 
+CREATE INDEX calibrations_deploy_ts_idx ON core.sensor_calibrations (deployment_id, calibration_ts DESC);
 CREATE INDEX ix_core_sensor_calibrations_deployment_id ON core.sensor_calibrations (deployment_id);
 CREATE INDEX ix_core_sensor_calibrations_variable_id ON core.sensor_calibrations (variable_id);
-CREATE INDEX calibrations_deploy_ts_idx ON core.sensor_calibrations (deployment_id, calibration_ts DESC);
 
 CREATE TABLE core.upload_row_issues (
 	issue_id BIGSERIAL NOT NULL, 
@@ -377,19 +381,19 @@ CREATE TABLE core.derived_measurements (
 	FOREIGN KEY(flag_id) REFERENCES meta.quality_flags (flag_id)
 );
 
-CREATE INDEX ix_core_derived_measurements_flag_id ON core.derived_measurements (flag_id);
-CREATE INDEX ix_core_derived_measurements_source_variable_id ON core.derived_measurements (source_variable_id);
+CREATE INDEX ix_core_derived_measurements_calibration_id ON core.derived_measurements (calibration_id);
+CREATE INDEX ix_core_derived_measurements_derived_variable_id ON core.derived_measurements (derived_variable_id);
 CREATE INDEX ix_core_derived_measurements_qc_status ON core.derived_measurements (qc_status);
+CREATE INDEX derived_measurements_status_idx ON core.derived_measurements (qc_status);
+CREATE INDEX derived_measurements_source_idx ON core.derived_measurements (source_measurement_id);
+CREATE INDEX derived_measurements_deploy_var_ts_idx ON core.derived_measurements (deployment_id, derived_variable_id, ts DESC);
+CREATE INDEX ix_core_derived_measurements_source_variable_id ON core.derived_measurements (source_variable_id);
+CREATE INDEX ix_core_derived_measurements_flag_id ON core.derived_measurements (flag_id);
+CREATE INDEX ix_core_derived_measurements_deployment_id ON core.derived_measurements (deployment_id);
 CREATE INDEX ix_core_derived_measurements_ts ON core.derived_measurements (ts);
 CREATE INDEX ix_core_derived_measurements_is_current ON core.derived_measurements (is_current);
-CREATE INDEX ix_core_derived_measurements_deployment_id ON core.derived_measurements (deployment_id);
 CREATE INDEX ix_core_derived_measurements_calculation_run_id ON core.derived_measurements (calculation_run_id);
 CREATE INDEX ix_core_derived_measurements_source_measurement_id ON core.derived_measurements (source_measurement_id);
-CREATE INDEX ix_core_derived_measurements_calibration_id ON core.derived_measurements (calibration_id);
-CREATE INDEX derived_measurements_source_idx ON core.derived_measurements (source_measurement_id);
-CREATE INDEX ix_core_derived_measurements_derived_variable_id ON core.derived_measurements (derived_variable_id);
-CREATE INDEX derived_measurements_deploy_var_ts_idx ON core.derived_measurements (deployment_id, derived_variable_id, ts DESC);
-CREATE INDEX derived_measurements_status_idx ON core.derived_measurements (qc_status);
 
 CREATE TABLE core.measurement_value_changes (
 	measurement_value_change_id BIGSERIAL NOT NULL, 
@@ -403,6 +407,6 @@ CREATE TABLE core.measurement_value_changes (
 	FOREIGN KEY(measurement_id) REFERENCES core.measurements (measurement_id) ON DELETE RESTRICT
 );
 
+CREATE INDEX ix_core_measurement_value_changes_edited_at ON core.measurement_value_changes (edited_at);
 CREATE INDEX ix_core_measurement_value_changes_measurement_id ON core.measurement_value_changes (measurement_id);
 CREATE INDEX measurement_value_changes_measurement_idx ON core.measurement_value_changes (measurement_id, edited_at);
-CREATE INDEX ix_core_measurement_value_changes_edited_at ON core.measurement_value_changes (edited_at);

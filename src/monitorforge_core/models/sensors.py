@@ -22,6 +22,17 @@ DeploymentStatus = ENUM(
     "active", "inactive", "maintenance", "retired", name="deployment_status", schema="core"
 )
 
+# A deployment's reporting resolution. Distinct resolutions of the "same"
+# variable at the same station (e.g. a logger's daily-total table vs its
+# hourly-total table) are different series, not the same one at different
+# sample rates -- binding them to one deployment causes false conflicts
+# where a daily total and an hourly total for the same channel name land
+# on the same (deployment, variable, timestamp) key. Each resolution gets
+# its own deployment.
+ResolutionType = ENUM(
+    "30s", "1m", "5m", "15m", "hourly", "8h", "daily", "other", name="resolution_type", schema="core"
+)
+
 
 class Sensor(db.Model, TimestampMixin, UUIDMixin, SoftDeleteMixin, UserTrackingMixin):
     """A physical sensor, independent of where/when it was deployed."""
@@ -99,6 +110,7 @@ class SensorDeployment(db.Model, TimestampMixin, UUIDMixin, SoftDeleteMixin, Use
     station_id = Column(Integer, ForeignKey("core.monitoring_stations.station_id"), nullable=False, index=True)
     depth_cm = Column(Float, index=True)
     position_code = Column(Text)
+    resolution = Column(ResolutionType, index=True)
     installed_at = Column(DateTime(timezone=True), nullable=False)
     removed_at = Column(DateTime(timezone=True))
     status = Column(DeploymentStatus, nullable=False, default="active", index=True)

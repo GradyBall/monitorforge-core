@@ -24,6 +24,12 @@ from sqlalchemy.orm import Session
 from monitorforge_core.contracts import BoundObservation
 from monitorforge_core.models import Measurement, Upload, UploadRowIssue
 
+# Keys per existing-row lookup query. Postgres's SQL parser stack overflows
+# somewhere in the low thousands of tuple_(...).in_(...) literals; this
+# stays comfortably under that with room for very large deployment/variable
+# key values.
+_LOOKUP_CHUNK_SIZE = 500
+
 
 @dataclass(frozen=True, slots=True)
 class WriteResult:
@@ -63,15 +69,25 @@ def write_measurements(
     existing_by_key: dict[tuple[int, int, object], float | None] = {}
     if valid:
         keys = [(obs.deployment_id, obs.variable_id, obs.ts) for obs in valid]
-        existing_rows = (
-            session.query(Measurement.deployment_id, Measurement.variable_id, Measurement.ts, Measurement.source_value)
-            .filter(tuple_(Measurement.deployment_id, Measurement.variable_id, Measurement.ts).in_(keys))
-            .all()
-        )
-        existing_by_key = {
-            (deployment_id, variable_id, ts): source_value
-            for deployment_id, variable_id, ts, source_value in existing_rows
-        }
+        # Chunked: a single tuple_(...).in_(keys) query with one literal per
+        # key blows Postgres's SQL parser stack ("stack depth limit
+        # exceeded") once a batch reaches a few thousand rows -- this isn't
+        # a theoretical concern, it reproduces on a single real logger file.
+        for chunk_start in range(0, len(keys), _LOOKUP_CHUNK_SIZE):
+            chunk = keys[chunk_start : chunk_start + _LOOKUP_CHUNK_SIZE]
+            existing_rows = (
+                session.query(
+                    Measurement.deployment_id, Measurement.variable_id, Measurement.ts, Measurement.source_value
+                )
+                .filter(tuple_(Measurement.deployment_id, Measurement.variable_id, Measurement.ts).in_(chunk))
+                .all()
+            )
+            existing_by_key.update(
+                {
+                    (deployment_id, variable_id, ts): source_value
+                    for deployment_id, variable_id, ts, source_value in existing_rows
+                }
+            )
 
     rows_inserted = 0
     duplicates_skipped = 0

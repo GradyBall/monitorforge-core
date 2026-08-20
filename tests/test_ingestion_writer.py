@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from monitorforge_core.contracts import BoundObservation
 from monitorforge_core.ingestion import write_measurements
@@ -85,3 +85,35 @@ def test_missing_value_logged_as_invalid(session):
     assert result.rows_inserted == 0
     assert result.invalid_rows == 1
     assert result.upload.row_issues[0].issue_type == "invalid_value"
+
+
+def test_large_batch_spanning_multiple_lookup_chunks_stays_correct(session):
+    """Regression test: a real PB-55 backfill (~20k rows) hit "stack depth
+    limit exceeded" on Postgres because the existing-row lookup built one
+    tuple_(...).in_(...) query with a literal per observation. The fix
+    chunks that lookup -- this proves chunking doesn't break duplicate/
+    conflict detection for keys that land in different chunks.
+    """
+    deployment, variable = _make_deployment(session)
+    base_ts = datetime(2024, 1, 1)
+    row_count = 1200  # several multiples of the 500-row lookup chunk size
+
+    first_batch = [
+        BoundObservation(deployment.deployment_id, variable.variable_id, base_ts + timedelta(minutes=i), float(i))
+        for i in range(row_count)
+    ]
+    first_result = write_measurements(session, first_batch, filename="first.dat", source_timezone="UTC")
+    assert first_result.rows_inserted == row_count
+
+    # Re-upload: every row should be recognized as a duplicate, including
+    # ones near chunk boundaries (index 499/500, 999/1000).
+    second_result = write_measurements(session, first_batch, filename="second.dat", source_timezone="UTC")
+    assert second_result.duplicates_skipped == row_count
+    assert second_result.rows_inserted == 0
+
+    # Conflict at an exact chunk boundary index.
+    conflicting = [
+        BoundObservation(deployment.deployment_id, variable.variable_id, base_ts + timedelta(minutes=500), 9999.0)
+    ]
+    third_result = write_measurements(session, conflicting, filename="third.dat", source_timezone="UTC")
+    assert third_result.conflicts_skipped == 1
