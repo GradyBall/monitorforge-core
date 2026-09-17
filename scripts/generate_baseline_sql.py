@@ -7,7 +7,7 @@ reflect it:
 
 This is the file new projects copy in as their first migration (see
 monitorforge-template). Projects that have already launched do NOT re-copy
-this file when core's schema changes -- per the project-blueprint's
+this file when core's schema changes -- per the workspace rule that
 "applied migrations are immutable" rule, they get a new incremental
 migration for the delta instead. Only pre-launch/new projects take an
 updated baseline.

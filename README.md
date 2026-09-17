@@ -1,13 +1,15 @@
 # monitorforge-core
 
-Shared canonical schema and ingestion contract for environmental monitoring
-web apps (Peñasquito, Bisbee, and future projects).
+Shared relational schema and ingestion contract for environmental monitoring web
+apps. It is the persistence side of MonitorForge's staged hybrid architecture:
+the pipeline produces one canonical observation handoff for both Excel delivery
+and relational storage.
 
 ## What this is
 
-Extracted from the Peñasquito monitoring database, generalized. See
-`../monitorforge-ideas.md` for the original extraction plan and
-`../DB Review/` for the lessons-learned/blueprint documents this follows.
+Extracted from the Peñasquito monitoring database and generalized around the
+current workspace contracts. The governing architecture decision is
+`../monitorforge-governance/docs/architecture/0001-staged-hybrid-delivery.md`.
 
 ## What actually transfers between projects (and what doesn't)
 
@@ -30,10 +32,36 @@ What *does* transfer:
   `(deployment_id, variable_id, ts, value)` tuples — it doesn't care what
   produced them.
 
-Each project (Peñasquito, Bisbee, ...) still writes its own parser and
-binder against its own sensors. That work is not optional and not
-skippable by this package — it's the part that is genuinely
-project-specific.
+## Relationship to the shared pipeline configuration
+
+Project YAML, variables, bindings, calibrations, units, QC definitions, and
+provenance rules are the shared semantic authority. The pipeline validates and
+applies them while producing versioned canonical observations. Excel and the
+database consume those same observations.
+
+Core deliberately does not read pipeline configuration files. The pipeline's
+relational adapter passes explicit typed values to core's ingestion contract. Core
+persists those values and enforces relational integrity and idempotency. The target
+persistence boundary reports accepted, duplicate, conflicting, rejected, and
+unresolved outcomes. It must not reimplement binding, calibration, unit
+conversion, QC, or derived-value logic.
+
+The complete versioned handoff and pipeline-to-core round trip are transition work,
+not a capability this README claims is already finished. The governing decision is
+`../monitorforge-governance/docs/architecture/0001-staged-hybrid-delivery.md`.
+
+The handoff also requires a reference-data projection that resolves stable config
+identifiers for projects, stations, sensors, deployments, variables, units,
+calibrations, and QC definitions to relational records before observations are
+written. Shared YAML must never contain database surrogate IDs. Existing
+application seed scripts are legacy transition mechanisms until that projection is
+implemented.
+
+Source-format parsing may require project-specific adapters, but those adapters
+belong in the shared pipeline rather than being rebuilt inside every web
+application. Channel binding is driven by shared project configuration in the
+pipeline. Core receives resolved stable identities and canonical values through
+the typed handoff; it does not own parsing or binding.
 
 ## Scope of this version
 

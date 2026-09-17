@@ -1,11 +1,11 @@
-"""Typed shapes that connect a project's parser/binder to the shared writer.
+"""Legacy v0 typed shapes connecting already-bound observations to the writer.
 
-Each project (Peñasquito, Bisbee, ...) writes its own parser (raw file ->
-list[RawObservation]) and its own binder (RawObservation -> BoundObservation,
-using that project's sensor/channel knowledge). Neither step is provided by
-this package -- see README.md for why. What this package provides is the
-shape both steps must agree on, and a writer (``monitorforge_core.ingestion``)
-that only needs the second shape.
+These classes predate the staged hybrid architecture. New source-format adapters
+and shared configuration-driven binding belong in the pipeline. A future versioned
+handoff will add stable external identities, reference-data projection, units,
+calibration/QC versions, and run provenance before resolving relational surrogate
+IDs. These existing shapes remain for compatibility until that coordinated
+producer/consumer migration is implemented.
 """
 
 from dataclasses import dataclass
@@ -16,7 +16,8 @@ from datetime import datetime
 class RawObservation:
     """One value read from a source file, before any sensor/channel knowledge is applied.
 
-    Produced by a project's format-specific parser (.dat, .csv, .html, ...).
+    Currently produced by a format-specific parser. New adapters belong in the
+    shared pipeline.
     """
 
     ts: datetime
@@ -29,8 +30,9 @@ class RawObservation:
 class BoundObservation:
     """One value resolved to a specific deployment and variable, ready to write.
 
-    Produced by a project's binder from a RawObservation, using that
-    project's own sensor-mapping/channel-binding logic.
+    Legacy database-ID form produced after binding. The target pipeline handoff
+    uses stable configuration identities and resolves database IDs through the
+    reference-data projection.
     """
 
     deployment_id: int
